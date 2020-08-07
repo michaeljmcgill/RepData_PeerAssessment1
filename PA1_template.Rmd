@@ -1,25 +1,207 @@
+``` {r housekeeping, include = FALSE}
+
+setwd("C:\\Users\\micha\\Documents\\JohnsHopkins\\JohnsHopkins_Course5_ReproducibleResearch\\Week 2\\RepData_PeerAssessment1")
+
+```
+
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "PA1_template"
+author: "Michael McGill"
+date: "8/7/2020"
+output: html_document
 ---
 
+## Loading required packages
+  
+``` {r loadpackages, message = FALSE}
+
+library(lubridate)
+library(dplyr)
+library(lattice)
+
+```
 
 ## Loading and preprocessing the data
+  
+Download data and load into R
 
+``` {r loaddata}
 
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+zip <- ".\\repdata_data_activity.zip"
+file <- ".\\activity.csv"
+
+if (!file.exists(zip)) download.file(url, zip)
+if (!file.exists(file)) unzip(zip)
+
+df <- read.csv(file, colClasses = c("numeric", "character", "character"))
+
+```
+
+Convert the date variable to a date format
+
+``` {r dateformat}
+
+df$date <- ymd(df$date)
+
+```
+
+Create a time variable
+
+``` {r timeformat}
+
+minutes <- substr(df$interval, nchar(df$interval) - 1, nchar(df$interval))
+hours <- substr(df$interval, 1, nchar(df$interval) - 2)
+hours <- sapply(hours, function(x) if(nchar(x) == 0) 0 else x)
+
+df$time <- paste(hours, ":", minutes, sep = "") %>% hm() %>% as_date()
+
+```
 
 ## What is mean total number of steps taken per day?
+  
+Calculate the total number of steps taken per day
+
+``` {r sumdailysteps, message = FALSE}
+
+dailysum_df <- df %>% group_by(date) %>% 
+               summarise(dailysum = sum(steps, na.rm = TRUE))
+
+```
+  
+Make a histogram of the total number of steps taken each day
+
+``` {r histsteps}
+
+hist(dailysum_df$dailysum, xlab = "Number of steps", main = NULL)
+
+```
+
+Calculate and report the mean and median of the total number of steps taken per day
+
+``` {r meansteps}
+
+mean(dailysum_df$dailysum, na.rm = TRUE)
 
 
+```
+
+``` {r medsteps}
+
+median(dailysum_df$dailysum, na.rm = TRUE)
+
+```
 
 ## What is the average daily activity pattern?
+  
+Make a time series plot of the 5-minute interval (x-axis) and the average number
+of steps taken, averaged across all days (y-axis)
 
+``` {r avgintervalsteps, message = FALSE}
 
+intervalavg_df <- df %>% group_by(time) %>%
+        summarise(intervalavg = mean(steps, na.rm = TRUE))
+
+plot(intervalavg_df$time, intervalavg_df$intervalavg, type = "l",
+     xlab = "Interval", ylab = "Number of steps",)
+
+```
+  
+Which 5-minute interval, on average across all the days in the dataset,
+contains the maximum number of steps?
+
+``` {r maxinterval}
+
+intervalavg_df[[which.max(intervalavg_df$intervalavg),1]] %>% format("%H:%M")
+
+```
 
 ## Imputing missing values
 
+Calculate and report the total number of missing values in the dataset
+(i.e. the total number of rows with NAs)
 
+``` {r numna}
+
+sum(is.na(df$steps))
+
+```
+Create a new dataset that is equal to the original dataset but with the
+missing data filled in. NAs will be replaced with the mean for that 5-minute
+interval.
+
+``` {r nonas}
+
+df_nonas <- df %>% group_by(time) %>%
+                   mutate(steps = ifelse(is.na(steps),
+                                         mean(steps, na.rm = TRUE),
+                                         steps))
+
+```
+
+Calculate the total number of steps taken per day
+
+``` {r sumdailysteps_nonas, message = FALSE}
+
+dailysum_df_nonas <- df_nonas %>% group_by(date) %>% 
+                     summarise(dailysum = sum(steps, na.rm = TRUE))
+
+```
+
+Make a histogram of the total number of steps taken each day.
+
+``` {r histsteps_nonas}
+
+hist(dailysum_df_nonas$dailysum, xlab = "Number of steps", main = NULL)
+
+```
+
+Calculate and report the mean and median of the total number of steps taken per day
+
+``` {r meansteps_nonas}
+
+mean(dailysum_df_nonas$dailysum, na.rm = TRUE)
+
+
+```
+
+``` {r medsteps_nonas}
+
+median(dailysum_df_nonas$dailysum, na.rm = TRUE)
+
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+Create a new factor variable in the dataset with two levels 
+– “weekday” and “weekend” indicating whether a given date is a
+weekday or weekend day.
+
+``` {r isweekday}
+
+df_nonas$weekday <- ifelse(wday(df_nonas$date) != 6 & wday(df_nonas$date) != 7,
+                           "weekday", "weekend")
+
+df_nonas$weekday <- as.factor(df_nonas$weekday)
+
+```
+
+Make a panel plot containing a time series plot of the 5-minute interval
+(x-axis) and the average number of steps taken, averaged across all weekday days
+or weekend days (y-axis).
+
+``` {r avgintervalsteps_nonas, message = FALSE}
+
+intervalavg_df_nonas <- df_nonas %>% group_by(weekday, time) %>%
+                        summarise(intervalavg = mean(steps, na.rm = TRUE))
+
+xlabs <- c("00:00", "05:00", "10:00", "15:00", "20:00") %>%
+         hm() %>% as_date()
+
+xyplot(intervalavg ~ time | weekday, intervalavg_df_nonas, 
+       type = "l", layout = c(1,2),
+       xlab = "Interval", ylab = "Number of steps",
+       scales = list(x = list(at = xlabs,
+                              labels = xlabs %>% format("%H:%M"))))
+
+```
